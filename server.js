@@ -4,7 +4,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: 'https://ttvhipo.github.io' }));
 app.use(express.static('public'));
 
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
@@ -84,7 +84,10 @@ app.get('/roast', async (req, res) => {
                 { role: "user", content: `Roast my music taste based on these artists: ${artists.join(', ')}` }
             ]
         }, {
-            headers: { 'Authorization': `Bearer ${deepseekApiKey}`, 'Content-Type': 'application/json' }
+            headers: {
+                'Authorization': `Bearer ${deepseekApiKey}`,
+                'Content-Type': 'application/json'
+            }
         });
 
         res.json({ roast: deepseekResponse.data.choices[0].message.content });
