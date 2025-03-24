@@ -37,7 +37,7 @@ app.get('/callback', async (req, res) => {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
 
-        res.redirect(`/index.html?access_token=${response.data.access_token}`);
+        res.redirect(`https://ttvhipo.github.io/Roast-Spotify-WEB/?access_token=${response.data.access_token}`);
     } catch (error) {
         console.error('Error getting access token:', error.response?.data);
         res.send('Error logging in.');
