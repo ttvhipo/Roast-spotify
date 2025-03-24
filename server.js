@@ -39,7 +39,7 @@ app.get('/callback', async (req, res) => {
 
         res.redirect(`https://ttvhipo.github.io/Roast-Spotify-WEB/?access_token=${response.data.access_token}`);
     } catch (error) {
-        console.error('Error getting access token:', error.response?.data);
+        console.error('Error getting access token:', error.response?.data || error.message);
         res.send('Error logging in.');
     }
 });
@@ -55,7 +55,7 @@ app.get('/top-artists', async (req, res) => {
 
         res.json(response.data.items.map(artist => artist.name));
     } catch (error) {
-        console.error('Error fetching top artists:', error.response?.data);
+        console.error('Error fetching top artists:', error.response?.data || error.message);
         res.status(500).json({ error: 'Failed to fetch top artists' });
     }
 });
@@ -76,6 +76,8 @@ app.get('/roast', async (req, res) => {
             return res.json({ roast: "Wow... you don't even listen to music?" });
         }
 
+        console.log('Artists:', artists); // Debug log
+
         // Generate roast using DeepSeek AI
         const deepseekResponse = await axios.post(DEEPSEEK_API_URL, {
             model: "deepseek-chat",
@@ -90,9 +92,10 @@ app.get('/roast', async (req, res) => {
             }
         });
 
+        console.log('DeepSeek response:', deepseekResponse.data); // Debug log
         res.json({ roast: deepseekResponse.data.choices[0].message.content });
     } catch (error) {
-        console.error('Error generating roast:', error.response?.data);
+        console.error('Error generating roast:', error.response?.data || error.message); // Improved error log
         res.status(500).json({ error: 'Failed to generate roast' });
     }
 });
