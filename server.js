@@ -18,7 +18,7 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const SPOTIFY_AUTH_URL = 'https://accounts.spotify.com/authorize';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
 const SPOTIFY_TOP_ARTISTS_URL = 'https://api.spotify.com/v1/me/top/artists?limit=5';
-const DEEPSEEK_API_URL = 'https://api.deepseek.ai/v1/chat/completions';
+const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';  // Corrected endpoint
 
 // Configuration check on startup
 function checkRequiredEnvVars() {
@@ -39,47 +39,32 @@ function checkRequiredEnvVars() {
     console.log('All required environment variables are present');
 }
 
-// Run configuration check
 checkRequiredEnvVars();
 
 // 1️⃣ Redirect user to Spotify login
 app.get('/login', (req, res) => {
     const scope = 'user-top-read';
-    const authUrl = `${SPOTIFY_AUTH_URL}?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${REDIRECT_URI}&scope=${scope}`;
-    res.redirect(authUrl);
+    res.redirect(`${SPOTIFY_AUTH_URL}?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${REDIRECT_URI}&scope=${scope}`);
 });
 
 // 2️⃣ Handle Spotify authentication callback
 app.get('/callback', async (req, res) => {
     const code = req.query.code;
-    
-    if (!code) {
-        console.error('No code provided in callback');
-        return res.status(400).send('Authorization code missing');
-    }
-
     try {
-        const response = await axios.post(SPOTIFY_TOKEN_URL, 
-            new URLSearchParams({
-                code,
-                redirect_uri: REDIRECT_URI,
-                grant_type: 'authorization_code',
-                client_id: CLIENT_ID,
-                client_secret: CLIENT_SECRET
-            }).toString(),
-            {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-            }
-        );
+        const response = await axios.post(SPOTIFY_TOKEN_URL, new URLSearchParams({
+            code,
+            redirect_uri: REDIRECT_URI,
+            grant_type: 'authorization_code',
+            client_id: CLIENT_ID,
+            client_secret: CLIENT_SECRET
+        }).toString(), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
 
         res.redirect(`https://ttvhipo.github.io/Roast-Spotify-WEB/?access_token=${response.data.access_token}`);
     } catch (error) {
-        console.error('Error getting access token:', {
-            message: error.message,
-            response: error.response?.data,
-            status: error.response?.status
-        });
-        res.status(500).send('Error during login process');
+        console.error('Error getting access token:', error.response?.data || error.message);
+        res.send('Error logging in.');
     }
 });
 
@@ -87,23 +72,14 @@ app.get('/callback', async (req, res) => {
 app.get('/top-artists', async (req, res) => {
     const token = req.query.access_token;
     
-    if (!token) {
-        return res.status(401).json({ error: 'Access token is required' });
-    }
-
     try {
         const response = await axios.get(SPOTIFY_TOP_ARTISTS_URL, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        const artists = response.data.items.map(artist => artist.name);
-        res.json(artists);
+        res.json(response.data.items.map(artist => artist.name));
     } catch (error) {
-        console.error('Error fetching top artists:', {
-            message: error.message,
-            response: error.response?.data,
-            status: error.response?.status
-        });
+        console.error('Error fetching top artists:', error.response?.data || error.message);
         res.status(500).json({ error: 'Failed to fetch top artists' });
     }
 });
@@ -112,10 +88,6 @@ app.get('/top-artists', async (req, res) => {
 app.get('/roast', async (req, res) => {
     const token = req.query.access_token;
     
-    if (!token) {
-        return res.status(401).json({ error: 'Access token is required' });
-    }
-
     try {
         // Get top artists from Spotify
         const spotifyResponse = await axios.get(SPOTIFY_TOP_ARTISTS_URL, {
@@ -123,39 +95,34 @@ app.get('/roast', async (req, res) => {
         });
 
         const artists = spotifyResponse.data.items.map(artist => artist.name);
-        
+        console.log('Artists:', artists);
+
         if (artists.length === 0) {
             return res.json({ roast: "Wow... you don't even listen to music?" });
         }
 
-        console.log('Artists:', artists);
-
         // Generate roast using DeepSeek AI
         const deepseekResponse = await axios.post(DEEPSEEK_API_URL, {
-            model: "deepseek-chat",
             messages: [
                 {
-                    role: "system",
-                    content: "You are an AI that roasts people's music taste in a funny and creative way. Keep responses under 100 words and make them entertaining."
-                },
-                {
                     role: "user",
-                    content: `Roast my music taste based on these artists: ${artists.join(', ')}`
+                    content: `You are a music critic known for your witty and sarcastic commentary. Roast my music taste based on these artists: ${artists.join(', ')}`
                 }
             ],
-            temperature: 0.8,
-            max_tokens: 150,
-            top_p: 1,
-            frequency_penalty: 0.5,
-            presence_penalty: 0.5
+            model: "deepseek-chat",
+            temperature: 0.7,
+            max_tokens: 200,
+            stream: false
         }, {
             headers: {
-                'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+                'Authorization': `sk-${DEEPSEEK_API_KEY}`,  // Note the 'sk-' prefix
                 'Content-Type': 'application/json'
             }
         });
 
-        // Extract the roast from the response
+        console.log('DeepSeek response:', deepseekResponse.data);
+        
+        // Extract the roast content
         const roastContent = deepseekResponse.data.choices[0]?.message?.content;
         
         if (!roastContent) {
@@ -173,7 +140,7 @@ app.get('/roast', async (req, res) => {
                 method: error.config?.method
             }
         });
-
+        
         res.status(500).json({ 
             error: 'Failed to generate roast',
             details: error.response?.data?.error_msg || error.message 
@@ -181,32 +148,4 @@ app.get('/roast', async (req, res) => {
     }
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        version: '1.0.0'
-    });
-});
-
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Started at: ${new Date().toISOString()}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-});
-
-// Error handling for uncaught exceptions
-process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error);
-    // Perform any necessary cleanup
-    process.exit(1);
-});
-
-// Error handling for unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-    // Perform any necessary cleanup
-    process.exit(1);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
